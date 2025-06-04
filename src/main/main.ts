@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import {
   Crypto,
   DownloadManager,
@@ -11,8 +10,6 @@ import { AllDebridClient } from "./services/download/all-debrid";
 import { HydraApi } from "./services/hydra-api";
 import { uploadGamesBatch } from "./services/library-sync";
 import { Aria2 } from "./services/aria2";
-=======
->>>>>>> upstream/main
 import { downloadsSublevel } from "./level/sublevels/downloads";
 import { sortBy } from "lodash-es";
 import { Downloader } from "@shared";

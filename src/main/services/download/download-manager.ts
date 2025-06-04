@@ -22,12 +22,9 @@ import { logger } from "../logger";
 import { db, downloadsSublevel, gamesSublevel, levelKeys } from "@main/level";
 import { sortBy } from "lodash-es";
 import { TorBoxClient } from "./torbox";
-<<<<<<< HEAD
 import { AllDebridClient } from "./all-debrid";
-=======
 import { GameFilesManager } from "../game-files-manager";
 import { HydraDebridClient } from "./hydra-debrid";
->>>>>>> upstream/main
 
 export class DownloadManager {
   private static downloadingGameId: string | null = null;

@@ -7,11 +7,8 @@ export enum Downloader {
   Datanodes,
   Mediafire,
   TorBox,
-<<<<<<< HEAD
   AllDebrid,
-=======
   Hydra,
->>>>>>> upstream/main
 }
 
 export enum DownloadSourceStatus {
@@ -57,14 +54,11 @@ export enum AuthPage {
 }
 
 export enum DownloadError {
-<<<<<<< HEAD
   NotCachedInRealDebrid = "download_error_not_cached_in_real_debrid",
   NotCachedInTorbox = "download_error_not_cached_in_torbox",
   NotCachedInAllDebrid = "download_error_not_cached_in_alldebrid",
-=======
   NotCachedOnRealDebrid = "download_error_not_cached_on_real_debrid",
   NotCachedOnTorBox = "download_error_not_cached_on_torbox",
->>>>>>> upstream/main
   GofileQuotaExceeded = "download_error_gofile_quota_exceeded",
   RealDebridAccountNotAuthorized = "download_error_real_debrid_account_not_authorized",
   NotCachedOnHydra = "download_error_not_cached_on_hydra",

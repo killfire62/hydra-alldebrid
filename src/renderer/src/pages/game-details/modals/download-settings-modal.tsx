@@ -117,13 +117,10 @@ export function DownloadSettingsModal({
         return userPreferences?.realDebridApiToken;
       if (downloader === Downloader.TorBox)
         return userPreferences?.torBoxApiToken;
-<<<<<<< HEAD
       if (downloader === Downloader.AllDebrid)
         return userPreferences?.allDebridApiKey;
-=======
       if (downloader === Downloader.Hydra)
         return isFeatureEnabled(Feature.Nimbus);
->>>>>>> upstream/main
       return true;
     });
 
@@ -136,10 +133,7 @@ export function DownloadSettingsModal({
     downloaders,
     userPreferences?.realDebridApiToken,
     userPreferences?.torBoxApiToken,
-<<<<<<< HEAD
     userPreferences?.allDebridApiKey,
-=======
->>>>>>> upstream/main
   ]);
 
   const handleChooseDownloadsPath = async () => {
@@ -196,7 +190,6 @@ export function DownloadSettingsModal({
           <span>{t("downloader")}</span>
 
           <div className="download-settings-modal__downloaders">
-<<<<<<< HEAD
             {downloaders.map((downloader) => (
               <Button
                 key={downloader}
@@ -220,7 +213,6 @@ export function DownloadSettingsModal({
                 {DOWNLOADER_NAME[downloader]}
               </Button>
             ))}
-=======
             {downloaders.map((downloader) => {
               const shouldDisableButton =
                 (downloader === Downloader.RealDebrid &&
@@ -247,7 +239,6 @@ export function DownloadSettingsModal({
                 </Button>
               );
             })}
->>>>>>> upstream/main
           </div>
         </div>
 

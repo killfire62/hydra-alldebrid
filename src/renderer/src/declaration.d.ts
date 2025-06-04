@@ -28,9 +28,7 @@ import type {
   LibraryGame,
   GameRunning,
   TorBoxUser,
-<<<<<<< HEAD
   AllDebridUser,
-=======
   Theme,
   Badge,
   Auth,
@@ -40,7 +38,6 @@ import type {
   ShopDetailsWithAssets,
   AchievementCustomNotificationPosition,
   AchievementNotificationInfo,
->>>>>>> upstream/main
 } from "@types";
 import type { AxiosProgressEvent } from "axios";
 import type disk from "diskusage";
