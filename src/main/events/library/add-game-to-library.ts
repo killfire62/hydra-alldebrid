@@ -1,12 +1,13 @@
 import { registerEvent } from "../register-event";
-
-import type { Game, GameShop } from "@types";
-
-import { steamGamesWorker } from "@main/workers";
+import type { GameShop } from "@types";
 import { createGame } from "@main/services/library-sync";
-import { steamUrlBuilder } from "@shared";
-import { updateLocalUnlockedAchivements } from "@main/services/achievements/update-local-unlocked-achivements";
-import { downloadsSublevel, gamesSublevel, levelKeys } from "@main/level";
+import { updateLocalUnlockedAchievements } from "@main/services/achievements/update-local-unlocked-achivements";
+import {
+  downloadsSublevel,
+  gamesShopAssetsSublevel,
+  gamesSublevel,
+  levelKeys,
+} from "@main/level";
 
 const addGameToLibrary = async (
   _event: Electron.IpcMainInvokeEvent,
@@ -15,27 +16,20 @@ const addGameToLibrary = async (
   title: string
 ) => {
   const gameKey = levelKeys.game(shop, objectId);
-  const game = await gamesSublevel.get(gameKey);
+  let game = await gamesSublevel.get(gameKey);
+
+  const gameAssets = await gamesShopAssetsSublevel.get(gameKey);
 
   if (game) {
     await downloadsSublevel.del(gameKey);
 
-    await gamesSublevel.put(gameKey, {
-      ...game,
-      isDeleted: false,
-    });
+    game.isDeleted = false;
+
+    await gamesSublevel.put(gameKey, game);
   } else {
-    const steamGame = await steamGamesWorker.run(Number(objectId), {
-      name: "getById",
-    });
-
-    const iconUrl = steamGame?.clientIcon
-      ? steamUrlBuilder.icon(objectId, steamGame.clientIcon)
-      : null;
-
-    const game: Game = {
+    game = {
       title,
-      iconUrl,
+      iconUrl: gameAssets?.iconUrl ?? null,
       objectId,
       shop,
       remoteId: null,
@@ -44,12 +38,12 @@ const addGameToLibrary = async (
       lastTimePlayed: null,
     };
 
-    await gamesSublevel.put(levelKeys.game(shop, objectId), game);
-
-    updateLocalUnlockedAchivements(game);
-
-    createGame(game).catch(() => {});
+    await gamesSublevel.put(gameKey, game);
   }
+
+  await createGame(game).catch(() => {});
+
+  updateLocalUnlockedAchievements(game);
 };
 
 registerEvent("addGameToLibrary", addGameToLibrary);

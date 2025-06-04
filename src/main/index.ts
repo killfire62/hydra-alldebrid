@@ -4,10 +4,14 @@ import i18n from "i18next";
 import path from "node:path";
 import url from "node:url";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
-import { logger, WindowManager } from "@main/services";
+import {
+  logger,
+  clearGamesPlaytime,
+  WindowManager,
+  Lock,
+} from "@main/services";
 import resources from "@locales";
 import { PythonRPC } from "./services/python-rpc";
-import { Aria2 } from "./services/aria2";
 import { db, levelKeys } from "./level";
 import { loadState } from "./main";
 
@@ -24,7 +28,9 @@ autoUpdater.logger = logger;
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) app.quit();
 
-app.commandLine.appendSwitch("--no-sandbox");
+if (process.platform !== "linux") {
+  app.commandLine.appendSwitch("--no-sandbox");
+}
 
 i18n.init({
   resources,
@@ -60,9 +66,11 @@ app.whenReady().then(async () => {
 
   await loadState();
 
-  const language = await db.get<string, string>(levelKeys.language, {
-    valueEncoding: "utf-8",
-  });
+  const language = await db
+    .get<string, string>(levelKeys.language, {
+      valueEncoding: "utf8",
+    })
+    .catch(() => "en");
 
   if (language) i18n.changeLanguage(language);
 
@@ -70,6 +78,7 @@ app.whenReady().then(async () => {
     WindowManager.createMainWindow();
   }
 
+  WindowManager.createNotificationWindow();
   WindowManager.createSystemTray(language || "en");
 });
 
@@ -85,6 +94,29 @@ const handleDeepLinkPath = (uri?: string) => {
 
     if (url.host === "install-source") {
       WindowManager.redirect(`settings${url.search}`);
+      return;
+    }
+
+    if (url.host === "profile") {
+      const userId = url.searchParams.get("userId");
+
+      if (userId) {
+        WindowManager.redirect(`profile/${userId}`);
+      }
+
+      return;
+    }
+
+    if (url.host === "install-theme") {
+      const themeName = url.searchParams.get("theme");
+      const authorId = url.searchParams.get("authorId");
+      const authorName = url.searchParams.get("authorName");
+
+      if (themeName && authorId && authorName) {
+        WindowManager.redirect(
+          `settings?theme=${themeName}&authorId=${authorId}&authorName=${authorName}`
+        );
+      }
     }
   } catch (error) {
     logger.error("Error handling deep link", uri, error);
@@ -116,10 +148,19 @@ app.on("window-all-closed", () => {
   WindowManager.mainWindow = null;
 });
 
-app.on("before-quit", () => {
-  /* Disconnects libtorrent */
-  PythonRPC.kill();
-  Aria2.kill();
+let canAppBeClosed = false;
+
+app.on("before-quit", async (e) => {
+  await Lock.releaseLock();
+
+  if (!canAppBeClosed) {
+    e.preventDefault();
+    /* Disconnects libtorrent */
+    PythonRPC.kill();
+    await clearGamesPlaytime();
+    canAppBeClosed = true;
+    app.quit();
+  }
 });
 
 app.on("activate", () => {

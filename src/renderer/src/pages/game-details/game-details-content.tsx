@@ -9,20 +9,15 @@ import { Sidebar } from "./sidebar/sidebar";
 
 import { useTranslation } from "react-i18next";
 import { cloudSyncContext, gameDetailsContext } from "@renderer/context";
-import { AuthPage, steamUrlBuilder } from "@shared";
+import { AuthPage } from "@shared";
 
 import cloudIconAnimated from "@renderer/assets/icons/cloud-animated.gif";
 import { useUserDetails } from "@renderer/hooks";
 import { useSubscription } from "@renderer/hooks/use-subscription";
 import "./game-details.scss";
 
-const HERO_HEIGHT = 300;
-const HERO_ANIMATION_THRESHOLD = 25;
-
 export function GameDetailsContent() {
   const heroRef = useRef<HTMLDivElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [isHeaderStuck, setIsHeaderStuck] = useState(false);
 
   const { t } = useTranslation("game_details");
 
@@ -61,13 +56,16 @@ export function GameDetailsContent() {
     return t("no_shop_details");
   }, [shopDetails, t]);
 
-  const [backdropOpactiy, setBackdropOpacity] = useState(1);
+  const [backdropOpacity, setBackdropOpacity] = useState(1);
 
   const handleHeroLoad = async () => {
-    const output = await average(steamUrlBuilder.libraryHero(objectId!), {
-      amount: 1,
-      format: "hex",
-    });
+    const output = await average(
+      shopDetails?.assets?.libraryHeroImageUrl ?? "",
+      {
+        amount: 1,
+        format: "hex",
+      }
+    );
 
     const backgroundColor = output
       ? new Color(output).darken(0.7).toString()
@@ -79,26 +77,6 @@ export function GameDetailsContent() {
   useEffect(() => {
     setBackdropOpacity(1);
   }, [objectId]);
-
-  const onScroll: React.UIEventHandler<HTMLElement> = (event) => {
-    const heroHeight = heroRef.current?.clientHeight ?? HERO_HEIGHT;
-
-    const scrollY = (event.target as HTMLDivElement).scrollTop;
-    const opacity = Math.max(
-      0,
-      1 - scrollY / (heroHeight - HERO_ANIMATION_THRESHOLD)
-    );
-
-    if (scrollY >= heroHeight && !isHeaderStuck) {
-      setIsHeaderStuck(true);
-    }
-
-    if (scrollY <= heroHeight && isHeaderStuck) {
-      setIsHeaderStuck(false);
-    }
-
-    setBackdropOpacity(opacity);
-  };
 
   const handleCloudSaveButtonClick = () => {
     if (!userDetails) {
@@ -122,35 +100,29 @@ export function GameDetailsContent() {
     <div
       className={`game-details__wrapper ${hasNSFWContentBlocked ? "game-details__wrapper--blurred" : ""}`}
     >
-      <img
-        src={steamUrlBuilder.libraryHero(objectId!)}
-        className="game-details__hero-image"
-        alt={game?.title}
-        onLoad={handleHeroLoad}
-      />
-
-      <section
-        ref={containerRef}
-        onScroll={onScroll}
-        className="game-details__container"
-      >
+      <section className="game-details__container">
         <div ref={heroRef} className="game-details__hero">
+          <img
+            src={shopDetails?.assets?.libraryHeroImageUrl ?? ""}
+            className="game-details__hero-image"
+            alt={game?.title}
+            onLoad={handleHeroLoad}
+          />
           <div
             className="game-details__hero-backdrop"
             style={{
               backgroundColor: gameColor,
               flex: 1,
-              opacity: Math.min(1, 1 - backdropOpactiy),
             }}
           />
 
           <div
             className="game-details__hero-logo-backdrop"
-            style={{ opacity: backdropOpactiy }}
+            style={{ opacity: backdropOpacity }}
           >
             <div className="game-details__hero-content">
               <img
-                src={steamUrlBuilder.logo(objectId!)}
+                src={shopDetails?.assets?.logoImageUrl ?? ""}
                 className="game-details__game-logo"
                 alt={game?.title}
               />
@@ -173,7 +145,7 @@ export function GameDetailsContent() {
           </div>
         </div>
 
-        <HeroPanel isHeaderStuck={isHeaderStuck} />
+        <HeroPanel />
 
         <div className="game-details__description-container">
           <div className="game-details__description-content">

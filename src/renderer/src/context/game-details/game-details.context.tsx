@@ -21,7 +21,7 @@ import type {
   GameShop,
   GameStats,
   LibraryGame,
-  ShopDetails,
+  ShopDetailsWithAssets,
   UserAchievement,
 } from "@types";
 
@@ -69,7 +69,9 @@ export function GameDetailsContextProvider({
   gameTitle,
   shop,
 }: Readonly<GameDetailsContextProps>) {
-  const [shopDetails, setShopDetails] = useState<ShopDetails | null>(null);
+  const [shopDetails, setShopDetails] = useState<ShopDetailsWithAssets | null>(
+    null
+  );
   const [achievements, setAchievements] = useState<UserAchievement[] | null>(
     null
   );
@@ -79,14 +81,17 @@ export function GameDetailsContextProvider({
 
   const [stats, setStats] = useState<GameStats | null>(null);
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [gameColor, setGameColor] = useState("");
   const [isGameRunning, setIsGameRunning] = useState(false);
   const [showRepacksModal, setShowRepacksModal] = useState(false);
   const [showGameOptionsModal, setShowGameOptionsModal] = useState(false);
 
   const { getRepacksForObjectId } = useRepacks();
-  const repacks = getRepacksForObjectId(objectId);
+
+  const repacks = useMemo(() => {
+    return getRepacksForObjectId(objectId);
+  }, [getRepacksForObjectId, objectId]);
 
   const { i18n } = useTranslation("game_details");
 
@@ -103,7 +108,7 @@ export function GameDetailsContextProvider({
     return window.electron
       .getGameByObjectId(shop, objectId)
       .then((result) => setGame(result));
-  }, [setGame, shop, objectId]);
+  }, [shop, objectId]);
 
   const isGameDownloading =
     lastPacket?.gameId === game?.id && game?.download?.status === "active";
@@ -117,7 +122,7 @@ export function GameDetailsContextProvider({
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    window.electron
+    const shopDetailsPromise = window.electron
       .getGameShopDetails(objectId, shop, getSteamLanguage(i18n.language))
       .then((result) => {
         if (abortController.signal.aborted) return;
@@ -132,15 +137,41 @@ export function GameDetailsContextProvider({
         ) {
           setHasNSFWContentBlocked(true);
         }
-      })
-      .finally(() => {
-        setIsLoading(false);
+
+        if (result?.assets) {
+          setIsLoading(false);
+        }
       });
 
-    window.electron.getGameStats(objectId, shop).then((result) => {
-      if (abortController.signal.aborted) return;
-      setStats(result);
-    });
+    const statsPromise = window.electron
+      .getGameStats(objectId, shop)
+      .then((result) => {
+        if (abortController.signal.aborted) return null;
+        setStats(result);
+        return result;
+      });
+
+    Promise.all([shopDetailsPromise, statsPromise])
+      .then(([_, stats]) => {
+        if (stats) {
+          const assets = stats.assets;
+          if (assets) {
+            window.electron.saveGameShopAssets(objectId, shop, assets);
+
+            setShopDetails((prev) => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                assets,
+              };
+            });
+          }
+        }
+      })
+      .finally(() => {
+        if (abortController.signal.aborted) return;
+        setIsLoading(false);
+      });
 
     if (userDetails) {
       window.electron
@@ -152,11 +183,13 @@ export function GameDetailsContextProvider({
         .catch(() => {});
     }
 
-    updateGame();
+    window.electron.syncGameByObjectId(shop, objectId).then(() => {
+      if (abortController.signal.aborted) return;
+      updateGame();
+    });
   }, [
     updateGame,
     dispatch,
-    gameTitle,
     objectId,
     shop,
     i18n.language,

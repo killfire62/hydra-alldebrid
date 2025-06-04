@@ -5,6 +5,8 @@ export const levelKeys = {
   game: (shop: GameShop, objectId: string) => `${shop}:${objectId}`,
   user: "user",
   auth: "auth",
+  themes: "themes",
+  gameShopAssets: "gameShopAssets",
   gameShopCache: "gameShopCache",
   gameShopCacheItem: (shop: GameShop, objectId: string, language: string) =>
     `${shop}:${objectId}:${language}`,
@@ -12,5 +14,6 @@ export const levelKeys = {
   downloads: "downloads",
   userPreferences: "userPreferences",
   language: "language",
-  sqliteMigrationDone: "sqliteMigrationDone",
+  screenState: "screenState",
+  rpcPassword: "rpcPassword",
 };

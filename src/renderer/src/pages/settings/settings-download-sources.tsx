@@ -1,10 +1,20 @@
 import { useContext, useEffect, useState } from "react";
 
-import { TextField, Button, Badge } from "@renderer/components";
+import {
+  TextField,
+  Button,
+  Badge,
+  ConfirmationModal,
+} from "@renderer/components";
 import { useTranslation } from "react-i18next";
 
 import type { DownloadSource } from "@types";
-import { NoEntryIcon, PlusCircleIcon, SyncIcon } from "@primer/octicons-react";
+import {
+  NoEntryIcon,
+  PlusCircleIcon,
+  SyncIcon,
+  TrashIcon,
+} from "@primer/octicons-react";
 import { AddDownloadSourceModal } from "./add-download-source-modal";
 import { useAppDispatch, useRepacks, useToast } from "@renderer/hooks";
 import { DownloadSourceStatus } from "@shared";
@@ -16,6 +26,10 @@ import { setFilters, clearFilters } from "@renderer/features";
 import "./settings-download-sources.scss";
 
 export function SettingsDownloadSources() {
+  const [
+    showConfirmationDeleteAllSourcesModal,
+    setShowConfirmationDeleteAllSourcesModal,
+  ] = useState(false);
   const [showAddDownloadSourceModal, setShowAddDownloadSourceModal] =
     useState(false);
   const [downloadSources, setDownloadSources] = useState<DownloadSource[]>([]);
@@ -23,6 +37,7 @@ export function SettingsDownloadSources() {
     useState(false);
   const [isRemovingDownloadSource, setIsRemovingDownloadSource] =
     useState(false);
+  const [isFetchingSources, setIsFetchingSources] = useState(true);
 
   const { sourceUrl, clearSourceUrl } = useContext(settingsContext);
 
@@ -41,6 +56,9 @@ export function SettingsDownloadSources() {
       .sortBy("createdAt")
       .then((sources) => {
         setDownloadSources(sources.reverse());
+      })
+      .finally(() => {
+        setIsFetchingSources(false);
       });
   };
 
@@ -52,17 +70,42 @@ export function SettingsDownloadSources() {
     if (sourceUrl) setShowAddDownloadSourceModal(true);
   }, [sourceUrl]);
 
-  const handleRemoveSource = (id: number) => {
+  const handleRemoveSource = (downloadSource: DownloadSource) => {
     setIsRemovingDownloadSource(true);
-    const channel = new BroadcastChannel(`download_sources:delete:${id}`);
+    const channel = new BroadcastChannel(
+      `download_sources:delete:${downloadSource.id}`
+    );
 
-    downloadSourcesWorker.postMessage(["DELETE_DOWNLOAD_SOURCE", id]);
+    downloadSourcesWorker.postMessage([
+      "DELETE_DOWNLOAD_SOURCE",
+      downloadSource.id,
+    ]);
 
     channel.onmessage = () => {
       showSuccessToast(t("removed_download_source"));
+      window.electron.removeDownloadSource(downloadSource.url);
 
       getDownloadSources();
       setIsRemovingDownloadSource(false);
+      channel.close();
+      updateRepacks();
+    };
+  };
+
+  const handleRemoveAllDownloadSources = () => {
+    setIsRemovingDownloadSource(true);
+
+    const id = crypto.randomUUID();
+    const channel = new BroadcastChannel(`download_sources:delete_all:${id}`);
+
+    downloadSourcesWorker.postMessage(["DELETE_ALL_DOWNLOAD_SOURCES", id]);
+
+    channel.onmessage = () => {
+      showSuccessToast(t("removed_download_sources"));
+      window.electron.removeDownloadSource("", true);
+      getDownloadSources();
+      setIsRemovingDownloadSource(false);
+      setShowConfirmationDeleteAllSourcesModal(false);
       channel.close();
       updateRepacks();
     };
@@ -115,6 +158,17 @@ export function SettingsDownloadSources() {
         onClose={handleModalClose}
         onAddDownloadSource={handleAddDownloadSource}
       />
+      <ConfirmationModal
+        cancelButtonLabel={t("cancel_button_confirmation_delete_all_sources")}
+        confirmButtonLabel={t("confirm_button_confirmation_delete_all_sources")}
+        descriptionText={t("description_confirmation_delete_all_sources")}
+        clickOutsideToClose={false}
+        onConfirm={handleRemoveAllDownloadSources}
+        visible={showConfirmationDeleteAllSourcesModal}
+        title={t("title_confirmation_delete_all_sources")}
+        onClose={() => setShowConfirmationDeleteAllSourcesModal(false)}
+        buttonsIsDisabled={isRemovingDownloadSource}
+      />
 
       <p>{t("download_sources_description")}</p>
 
@@ -125,7 +179,8 @@ export function SettingsDownloadSources() {
           disabled={
             !downloadSources.length ||
             isSyncingDownloadSources ||
-            isRemovingDownloadSource
+            isRemovingDownloadSource ||
+            isFetchingSources
           }
           onClick={syncDownloadSources}
         >
@@ -133,15 +188,36 @@ export function SettingsDownloadSources() {
           {t("sync_download_sources")}
         </Button>
 
-        <Button
-          type="button"
-          theme="outline"
-          onClick={() => setShowAddDownloadSourceModal(true)}
-          disabled={isSyncingDownloadSources}
-        >
-          <PlusCircleIcon />
-          {t("add_download_source")}
-        </Button>
+        <div className="settings-download-sources__buttons-container">
+          <Button
+            type="button"
+            theme="danger"
+            onClick={() => setShowConfirmationDeleteAllSourcesModal(true)}
+            disabled={
+              isRemovingDownloadSource ||
+              isSyncingDownloadSources ||
+              !downloadSources.length ||
+              isFetchingSources
+            }
+          >
+            <TrashIcon />
+            {t("button_delete_all_sources")}
+          </Button>
+
+          <Button
+            type="button"
+            theme="outline"
+            onClick={() => setShowAddDownloadSourceModal(true)}
+            disabled={
+              isSyncingDownloadSources ||
+              isFetchingSources ||
+              isRemovingDownloadSource
+            }
+          >
+            <PlusCircleIcon />
+            {t("add_download_source")}
+          </Button>
+        </div>
       </div>
 
       <ul className="settings-download-sources__list">
@@ -183,7 +259,7 @@ export function SettingsDownloadSources() {
                 <Button
                   type="button"
                   theme="outline"
-                  onClick={() => handleRemoveSource(downloadSource.id)}
+                  onClick={() => handleRemoveSource(downloadSource)}
                   disabled={isRemovingDownloadSource}
                 >
                   <NoEntryIcon />

@@ -21,8 +21,10 @@ import { buildGameDetailsPath } from "@renderer/helpers";
 import { SidebarProfile } from "./sidebar-profile";
 import { sortBy } from "lodash-es";
 import cn from "classnames";
-import { CommentDiscussionIcon } from "@primer/octicons-react";
+import { CommentDiscussionIcon, PlayIcon } from "@primer/octicons-react";
 import { SidebarGameItem } from "./sidebar-game-item";
+import { setFriendRequestCount } from "@renderer/features/user-details-slice";
+import { useDispatch } from "react-redux";
 
 const SIDEBAR_MIN_WIDTH = 200;
 const SIDEBAR_INITIAL_WIDTH = 250;
@@ -30,8 +32,12 @@ const SIDEBAR_MAX_WIDTH = 450;
 
 const initialSidebarWidth = window.localStorage.getItem("sidebarWidth");
 
+const isGamePlayable = (game: LibraryGame) => Boolean(game.executablePath);
+
 export function Sidebar() {
   const filterRef = useRef<HTMLInputElement>(null);
+
+  const dispatch = useDispatch();
 
   const { t } = useTranslation("sidebar");
   const { library, updateLibrary } = useLibrary();
@@ -56,9 +62,25 @@ export function Sidebar() {
 
   const { showWarningToast } = useToast();
 
+  const [showPlayableOnly, setShowPlayableOnly] = useState(false);
+
+  const handlePlayButtonClick = () => {
+    setShowPlayableOnly(!showPlayableOnly);
+  };
+
   useEffect(() => {
     updateLibrary();
   }, [lastPacket?.gameId, updateLibrary]);
+
+  useEffect(() => {
+    const unsubscribe = window.electron.onSyncFriendRequests((result) => {
+      dispatch(setFriendRequestCount(result.friendRequestCount));
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [dispatch]);
 
   const sidebarRef = useRef<HTMLElement>(null);
 
@@ -167,6 +189,10 @@ export function Sidebar() {
     }
   };
 
+  const favoriteGames = useMemo(() => {
+    return sortedLibrary.filter((game) => game.favorite);
+  }, [sortedLibrary]);
+
   return (
     <aside
       ref={sidebarRef}
@@ -206,13 +232,12 @@ export function Sidebar() {
             </ul>
           </section>
 
-          <section className="sidebar__section">
-            <small className="sidebar__section-title">{t("favorites")}</small>
+          {favoriteGames.length > 0 && (
+            <section className="sidebar__section">
+              <small className="sidebar__section-title">{t("favorites")}</small>
 
-            <ul className="sidebar__menu">
-              {sortedLibrary
-                .filter((game) => game.favorite)
-                .map((game) => (
+              <ul className="sidebar__menu">
+                {favoriteGames.map((game) => (
                   <SidebarGameItem
                     key={game.id}
                     game={game}
@@ -220,11 +245,25 @@ export function Sidebar() {
                     getGameTitle={getGameTitle}
                   />
                 ))}
-            </ul>
-          </section>
+              </ul>
+            </section>
+          )}
 
           <section className="sidebar__section">
-            <small className="sidebar__section-title">{t("my_library")}</small>
+            <div className="sidebar__section-header">
+              <small className="sidebar__section-title">
+                {t("my_library")}
+              </small>
+              <button
+                type="button"
+                className={cn("sidebar__play-button", {
+                  "sidebar__play-button--active": showPlayableOnly,
+                })}
+                onClick={handlePlayButtonClick}
+              >
+                <PlayIcon size={16} />
+              </button>
+            </div>
 
             <TextField
               ref={filterRef}
@@ -236,6 +275,7 @@ export function Sidebar() {
             <ul className="sidebar__menu">
               {filteredLibrary
                 .filter((game) => !game.favorite)
+                .filter((game) => !showPlayableOnly || isGamePlayable(game))
                 .map((game) => (
                   <SidebarGameItem
                     key={game.id}

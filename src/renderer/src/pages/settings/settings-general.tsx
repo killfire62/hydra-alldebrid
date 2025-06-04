@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import {
   TextField,
   Button,
@@ -12,6 +12,9 @@ import languageResources from "@locales";
 import { orderBy } from "lodash-es";
 import { settingsContext } from "@renderer/context";
 import "./settings-general.scss";
+import { DesktopDownloadIcon } from "@primer/octicons-react";
+import { logger } from "@renderer/logger";
+import { AchievementCustomNotificationPosition } from "@types";
 
 interface LanguageOption {
   option: string;
@@ -27,13 +30,20 @@ export function SettingsGeneral() {
     (state) => state.userPreferences.value
   );
 
+  const [canInstallCommonRedist, setCanInstallCommonRedist] = useState(false);
+  const [installingCommonRedist, setInstallingCommonRedist] = useState(false);
+
   const [form, setForm] = useState({
     downloadsPath: "",
     downloadNotificationsEnabled: false,
     repackUpdatesNotificationsEnabled: false,
-    achievementNotificationsEnabled: false,
+    friendRequestNotificationsEnabled: false,
+    friendStartGameNotificationsEnabled: true,
+    achievementNotificationsEnabled: true,
+    achievementCustomNotificationsEnabled: true,
+    achievementCustomNotificationPosition:
+      "top-left" as AchievementCustomNotificationPosition,
     language: "",
-
     customStyles: window.localStorage.getItem("customStyles") || "",
   });
 
@@ -45,6 +55,16 @@ export function SettingsGeneral() {
     window.electron.getDefaultDownloadsPath().then((path) => {
       setDefaultDownloadsPath(path);
     });
+
+    window.electron.canInstallCommonRedist().then((canInstall) => {
+      setCanInstallCommonRedist(canInstall);
+    });
+
+    const interval = setInterval(() => {
+      window.electron.canInstallCommonRedist().then((canInstall) => {
+        setCanInstallCommonRedist(canInstall);
+      });
+    }, 1000 * 5);
 
     setLanguageOptions(
       orderBy(
@@ -58,6 +78,10 @@ export function SettingsGeneral() {
         "asc"
       )
     );
+
+    return () => {
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
@@ -81,22 +105,57 @@ export function SettingsGeneral() {
         repackUpdatesNotificationsEnabled:
           userPreferences.repackUpdatesNotificationsEnabled ?? false,
         achievementNotificationsEnabled:
-          userPreferences.achievementNotificationsEnabled ?? false,
+          userPreferences.achievementNotificationsEnabled ?? true,
+        achievementCustomNotificationsEnabled:
+          userPreferences.achievementCustomNotificationsEnabled ?? true,
+        achievementCustomNotificationPosition:
+          userPreferences.achievementCustomNotificationPosition ?? "top-left",
+        friendRequestNotificationsEnabled:
+          userPreferences.friendRequestNotificationsEnabled ?? false,
+        friendStartGameNotificationsEnabled:
+          userPreferences.friendStartGameNotificationsEnabled ?? true,
         language: language ?? "en",
       }));
     }
   }, [userPreferences, defaultDownloadsPath]);
 
-  const handleLanguageChange = (event) => {
+  const achievementCustomNotificationPositionOptions = useMemo(() => {
+    return [
+      "top-left",
+      "top-center",
+      "top-right",
+      "bottom-left",
+      "bottom-center",
+      "bottom-right",
+    ].map((position) => ({
+      key: position,
+      value: position,
+      label: t(position),
+    }));
+  }, [t]);
+
+  const handleLanguageChange = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
     const value = event.target.value;
 
     handleChange({ language: value });
     changeLanguage(value);
   };
 
-  const handleChange = (values: Partial<typeof form>) => {
+  const handleChange = async (values: Partial<typeof form>) => {
     setForm((prev) => ({ ...prev, ...values }));
-    updateUserPreferences(values);
+    await updateUserPreferences(values);
+  };
+
+  const handleChangeAchievementCustomNotificationPosition = async (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    const value = event.target.value as AchievementCustomNotificationPosition;
+
+    await handleChange({ achievementCustomNotificationPosition: value });
+
+    window.electron.updateAchievementCustomNotificationWindow();
   };
 
   const handleChooseDownloadsPath = async () => {
@@ -108,6 +167,28 @@ export function SettingsGeneral() {
     if (filePaths && filePaths.length > 0) {
       const path = filePaths[0];
       handleChange({ downloadsPath: path });
+    }
+  };
+
+  useEffect(() => {
+    const unlisten = window.electron.onCommonRedistProgress(
+      ({ log, complete }) => {
+        if (log === "Installation timed out" || complete) {
+          setInstallingCommonRedist(false);
+        }
+      }
+    );
+
+    return () => unlisten();
+  }, []);
+
+  const handleInstallCommonRedist = async () => {
+    setInstallingCommonRedist(true);
+    try {
+      await window.electron.installCommonRedist();
+    } catch (err) {
+      logger.error(err);
+      setInstallingCommonRedist(false);
     }
   };
 
@@ -136,9 +217,7 @@ export function SettingsGeneral() {
         }))}
       />
 
-      <p className="settings-general__notifications-title">
-        {t("notifications")}
-      </p>
+      <h2 className="settings-general__section-title">{t("notifications")}</h2>
 
       <CheckboxField
         label={t("enable_download_notifications")}
@@ -162,15 +241,90 @@ export function SettingsGeneral() {
       />
 
       <CheckboxField
-        label={t("enable_achievement_notifications")}
-        checked={form.achievementNotificationsEnabled}
+        label={t("enable_friend_request_notifications")}
+        checked={form.friendRequestNotificationsEnabled}
         onChange={() =>
           handleChange({
-            achievementNotificationsEnabled:
-              !form.achievementNotificationsEnabled,
+            friendRequestNotificationsEnabled:
+              !form.friendRequestNotificationsEnabled,
           })
         }
       />
+
+      <CheckboxField
+        label={t("enable_friend_start_game_notifications")}
+        checked={form.friendStartGameNotificationsEnabled}
+        onChange={() =>
+          handleChange({
+            friendStartGameNotificationsEnabled:
+              !form.friendStartGameNotificationsEnabled,
+          })
+        }
+      />
+
+      <CheckboxField
+        label={t("enable_achievement_notifications")}
+        checked={form.achievementNotificationsEnabled}
+        onChange={async () => {
+          await handleChange({
+            achievementNotificationsEnabled:
+              !form.achievementNotificationsEnabled,
+          });
+
+          window.electron.updateAchievementCustomNotificationWindow();
+        }}
+      />
+
+      <CheckboxField
+        label={t("enable_achievement_custom_notifications")}
+        checked={form.achievementCustomNotificationsEnabled}
+        disabled={!form.achievementNotificationsEnabled}
+        onChange={async () => {
+          await handleChange({
+            achievementCustomNotificationsEnabled:
+              !form.achievementCustomNotificationsEnabled,
+          });
+
+          window.electron.updateAchievementCustomNotificationWindow();
+        }}
+      />
+
+      {form.achievementNotificationsEnabled &&
+        form.achievementCustomNotificationsEnabled && (
+          <>
+            <SelectField
+              className="settings-general__achievement-custom-notification-position__select-variation"
+              label={t("achievement_custom_notification_position")}
+              value={form.achievementCustomNotificationPosition}
+              onChange={handleChangeAchievementCustomNotificationPosition}
+              options={achievementCustomNotificationPositionOptions}
+            />
+
+            <Button
+              className="settings-general__test-achievement-notification-button"
+              onClick={() => window.electron.showAchievementTestNotification()}
+            >
+              {t("test_notification")}
+            </Button>
+          </>
+        )}
+
+      <h2 className="settings-general__section-title">{t("common_redist")}</h2>
+
+      <p className="settings-general__common-redist-description">
+        {t("common_redist_description")}
+      </p>
+
+      <Button
+        onClick={handleInstallCommonRedist}
+        className="settings-general__common-redist-button"
+        disabled={!canInstallCommonRedist || installingCommonRedist}
+      >
+        <DesktopDownloadIcon />
+        {installingCommonRedist
+          ? t("installing_common_redist")
+          : t("install_common_redist")}
+      </Button>
     </div>
   );
 }

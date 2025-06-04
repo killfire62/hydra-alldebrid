@@ -1,18 +1,29 @@
 import { registerEvent } from "../register-event";
 import type { Download, StartGameDownloadPayload } from "@types";
 import { DownloadManager, HydraApi, logger } from "@main/services";
-
-import { steamGamesWorker } from "@main/workers";
 import { createGame } from "@main/services/library-sync";
-import { Downloader, DownloadError, steamUrlBuilder } from "@shared";
-import { downloadsSublevel, gamesSublevel, levelKeys } from "@main/level";
+import { Downloader, DownloadError } from "@shared";
+import {
+  downloadsSublevel,
+  gamesShopAssetsSublevel,
+  gamesSublevel,
+  levelKeys,
+} from "@main/level";
 import { AxiosError } from "axios";
 
 const startGameDownload = async (
   _event: Electron.IpcMainInvokeEvent,
   payload: StartGameDownloadPayload
 ) => {
-  const { objectId, title, shop, downloadPath, downloader, uri } = payload;
+  const {
+    objectId,
+    title,
+    shop,
+    downloadPath,
+    downloader,
+    uri,
+    automaticallyExtract,
+  } = payload;
 
   const gameKey = levelKeys.game(shop, objectId);
 
@@ -28,27 +39,20 @@ const startGameDownload = async (
   }
 
   const game = await gamesSublevel.get(gameKey);
+  const gameAssets = await gamesShopAssetsSublevel.get(gameKey);
 
   /* Delete any previous download */
   await downloadsSublevel.del(gameKey);
 
-  if (game?.isDeleted) {
+  if (game) {
     await gamesSublevel.put(gameKey, {
       ...game,
       isDeleted: false,
     });
   } else {
-    const steamGame = await steamGamesWorker.run(Number(objectId), {
-      name: "getById",
-    });
-
-    const iconUrl = steamGame?.clientIcon
-      ? steamUrlBuilder.icon(objectId, steamGame.clientIcon)
-      : null;
-
     await gamesSublevel.put(gameKey, {
       title,
-      iconUrl,
+      iconUrl: gameAssets?.iconUrl ?? null,
       objectId,
       shop,
       remoteId: null,
@@ -74,6 +78,8 @@ const startGameDownload = async (
     shouldSeed: false,
     timestamp: Date.now(),
     queued: true,
+    extracting: false,
+    automaticallyExtract,
   };
 
   try {

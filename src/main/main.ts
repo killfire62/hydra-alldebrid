@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import {
   Crypto,
   DownloadManager,
@@ -10,38 +11,46 @@ import { AllDebridClient } from "./services/download/all-debrid";
 import { HydraApi } from "./services/hydra-api";
 import { uploadGamesBatch } from "./services/library-sync";
 import { Aria2 } from "./services/aria2";
+=======
+>>>>>>> upstream/main
 import { downloadsSublevel } from "./level/sublevels/downloads";
 import { sortBy } from "lodash-es";
 import { Downloader } from "@shared";
+import { levelKeys, db } from "./level";
+import type { UserPreferences } from "@types";
 import {
-  gameAchievementsSublevel,
-  gamesSublevel,
-  levelKeys,
-  db,
-} from "./level";
-import { Auth, User, type UserPreferences } from "@types";
-import { knexClient } from "./knex-client";
-import { TorBoxClient } from "./services/download/torbox";
+  WSClient,
+  SystemPath,
+  CommonRedistManager,
+  TorBoxClient,
+  RealDebridClient,
+  Aria2,
+  DownloadManager,
+  HydraApi,
+  uploadGamesBatch,
+  startMainLoop,
+  Ludusavi,
+  Lock,
+} from "@main/services";
 
 export const loadState = async () => {
-  const userPreferences = await migrateFromSqlite().then(async () => {
-    await db.put<string, boolean>(levelKeys.sqliteMigrationDone, true, {
-      valueEncoding: "json",
-    });
+  await Lock.acquireLock();
 
-    return db.get<string, UserPreferences | null>(levelKeys.userPreferences, {
+  const userPreferences = await db.get<string, UserPreferences | null>(
+    levelKeys.userPreferences,
+    {
       valueEncoding: "json",
-    });
-  });
+    }
+  );
 
   await import("./events");
 
-  Aria2.spawn();
+  if (process.platform !== "darwin") {
+    Aria2.spawn();
+  }
 
   if (userPreferences?.realDebridApiToken) {
-    RealDebridClient.authorize(
-      Crypto.decrypt(userPreferences.realDebridApiToken)
-    );
+    RealDebridClient.authorize(userPreferences.realDebridApiToken);
   }
 
   if (userPreferences?.allDebridApiKey) {
@@ -49,39 +58,47 @@ export const loadState = async () => {
   }
 
   if (userPreferences?.torBoxApiToken) {
-    TorBoxClient.authorize(Crypto.decrypt(userPreferences.torBoxApiToken));
+    TorBoxClient.authorize(userPreferences.torBoxApiToken);
   }
 
-  Ludusavi.addManifestToLudusaviConfig();
+  Ludusavi.copyConfigFileToUserData();
+  Ludusavi.copyBinaryToUserData();
 
-  HydraApi.setupApi().then(() => {
+  await HydraApi.setupApi().then(() => {
     uploadGamesBatch();
+    WSClient.connect();
   });
 
   const downloads = await downloadsSublevel
     .values()
     .all()
     .then((games) => {
-      return sortBy(
-        games.filter((game) => game.queued),
-        "timestamp",
-        "DESC"
-      );
+      return sortBy(games, "timestamp", "DESC");
     });
 
-  const [nextItemOnQueue] = downloads;
+  downloads.forEach((download) => {
+    if (download.extracting) {
+      downloadsSublevel.put(levelKeys.game(download.shop, download.objectId), {
+        ...download,
+        extracting: false,
+      });
+    }
+  });
+
+  const [nextItemOnQueue] = downloads.filter((game) => game.queued);
 
   const downloadsToSeed = downloads.filter(
-    (download) =>
-      download.shouldSeed &&
-      download.downloader === Downloader.Torrent &&
-      download.progress === 1 &&
-      download.uri !== null
+    (game) =>
+      game.shouldSeed &&
+      game.downloader === Downloader.Torrent &&
+      game.progress === 1 &&
+      game.uri !== null
   );
 
   await DownloadManager.startRPC(nextItemOnQueue, downloadsToSeed);
 
   startMainLoop();
+<<<<<<< HEAD
 };
 
 const migrateFromSqlite = async () => {
@@ -220,4 +237,10 @@ const migrateFromSqlite = async () => {
     migrateAchievements,
     migrateUser,
   ]);
+=======
+
+  CommonRedistManager.downloadCommonRedist();
+
+  SystemPath.checkIfPathsAreAvailable();
+>>>>>>> upstream/main
 };

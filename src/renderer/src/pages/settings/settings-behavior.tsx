@@ -20,8 +20,11 @@ export function SettingsBehavior() {
     runAtStartup: false,
     startMinimized: false,
     disableNsfwAlert: false,
+    enableAutoInstall: false,
     seedAfterDownloadComplete: false,
     showHiddenAchievementsDescription: false,
+    showDownloadSpeedInMegabytes: false,
+    extractFilesByDefault: true,
   });
 
   const { t } = useTranslation("settings");
@@ -34,10 +37,14 @@ export function SettingsBehavior() {
         runAtStartup: userPreferences.runAtStartup ?? false,
         startMinimized: userPreferences.startMinimized ?? false,
         disableNsfwAlert: userPreferences.disableNsfwAlert ?? false,
+        enableAutoInstall: userPreferences.enableAutoInstall ?? false,
         seedAfterDownloadComplete:
           userPreferences.seedAfterDownloadComplete ?? false,
         showHiddenAchievementsDescription:
           userPreferences.showHiddenAchievementsDescription ?? false,
+        showDownloadSpeedInMegabytes:
+          userPreferences.showDownloadSpeedInMegabytes ?? false,
+        extractFilesByDefault: userPreferences.extractFilesByDefault ?? true,
       });
     }
   }, [userPreferences]);
@@ -99,6 +106,16 @@ export function SettingsBehavior() {
         </div>
       )}
 
+      {window.electron.platform === "linux" && (
+        <CheckboxField
+          label={t("enable_auto_install")}
+          checked={form.enableAutoInstall}
+          onChange={() =>
+            handleChange({ enableAutoInstall: !form.enableAutoInstall })
+          }
+        />
+      )}
+
       <CheckboxField
         label={t("disable_nsfw_alert")}
         checked={form.disableNsfwAlert}
@@ -124,6 +141,26 @@ export function SettingsBehavior() {
           handleChange({
             showHiddenAchievementsDescription:
               !form.showHiddenAchievementsDescription,
+          })
+        }
+      />
+
+      <CheckboxField
+        label={t("show_download_speed_in_megabytes")}
+        checked={form.showDownloadSpeedInMegabytes}
+        onChange={() =>
+          handleChange({
+            showDownloadSpeedInMegabytes: !form.showDownloadSpeedInMegabytes,
+          })
+        }
+      />
+
+      <CheckboxField
+        label={t("extract_files_by_default")}
+        checked={form.extractFilesByDefault}
+        onChange={() =>
+          handleChange({
+            extractFilesByDefault: !form.extractFilesByDefault,
           })
         }
       />

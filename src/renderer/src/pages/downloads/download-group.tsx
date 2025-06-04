@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import cn from "classnames";
 
 import type { GameShop, LibraryGame, SeedingStatus } from "@types";
 
@@ -8,13 +9,13 @@ import {
   formatDownloadProgress,
 } from "@renderer/helpers";
 
-import { Downloader, formatBytes, steamUrlBuilder } from "@shared";
+import { Downloader, formatBytes } from "@shared";
 import { DOWNLOADER_NAME } from "@renderer/constants";
-import { useAppSelector, useDownload } from "@renderer/hooks";
+import { useAppSelector, useDownload, useLibrary } from "@renderer/hooks";
 
 import "./download-group.scss";
 import { useTranslation } from "react-i18next";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import {
   DropdownMenu,
   DropdownMenuItem,
@@ -22,15 +23,16 @@ import {
 import {
   ColumnsIcon,
   DownloadIcon,
+  FileDirectoryIcon,
   LinkIcon,
   PlayIcon,
+  QuestionIcon,
   ThreeBarsIcon,
   TrashIcon,
   UnlinkIcon,
   XCircleIcon,
 } from "@primer/octicons-react";
 
-import torBoxLogo from "@renderer/assets/icons/torbox.webp";
 export interface DownloadGroupProps {
   library: LibraryGame[];
   title: string;
@@ -53,6 +55,8 @@ export function DownloadGroup({
   const userPreferences = useAppSelector(
     (state) => state.userPreferences.value
   );
+
+  const { updateLibrary } = useLibrary();
 
   const {
     lastPacket,
@@ -87,12 +91,24 @@ export function DownloadGroup({
     return map;
   }, [seedingStatus]);
 
+  const extractGameDownload = useCallback(
+    async (shop: GameShop, objectId: string) => {
+      await window.electron.extractGameDownload(shop, objectId);
+      updateLibrary();
+    },
+    [updateLibrary]
+  );
+
   const getGameInfo = (game: LibraryGame) => {
     const download = game.download!;
 
     const isGameDownloading = lastPacket?.gameId === game.id;
     const finalDownloadSize = getFinalDownloadSize(game);
     const seedingStatus = seedingMap.get(game.id);
+
+    if (download.extracting) {
+      return <p>{t("extracting")}</p>;
+    }
 
     if (isGameDeleting(game.id)) {
       return <p>{t("deleting")}</p>;
@@ -131,8 +147,12 @@ export function DownloadGroup({
           </p>
 
           {download.downloader === Downloader.Torrent && (
-            <small>
+            <small
+              className="download-group__details-with-article"
+              data-open-article="peers-and-seeds"
+            >
               {lastPacket?.numPeers} peers / {lastPacket?.numSeeds} seeds
+              <QuestionIcon size={12} />
             </small>
           )}
         </>
@@ -145,7 +165,14 @@ export function DownloadGroup({
       return download.status === "seeding" &&
         download.downloader === Downloader.Torrent ? (
         <>
-          <p>{t("seeding")}</p>
+          <p
+            data-open-article="seeding"
+            className="download-group__details-with-article"
+          >
+            {t("seeding")}
+
+            <QuestionIcon />
+          </p>
           {uploadSpeed && <p>{uploadSpeed}/s</p>}
         </>
       ) : (
@@ -192,7 +219,7 @@ export function DownloadGroup({
 
     const deleting = isGameDeleting(game.id);
 
-    if (download?.progress === 1) {
+    if (game.download?.progress === 1) {
       return [
         {
           label: t("install"),
@@ -203,12 +230,20 @@ export function DownloadGroup({
           icon: <DownloadIcon />,
         },
         {
+          label: t("extract"),
+          disabled: game.download.extracting,
+          icon: <FileDirectoryIcon />,
+          onClick: () => {
+            extractGameDownload(game.shop, game.objectId);
+          },
+        },
+        {
           label: t("stop_seeding"),
           disabled: deleting,
           icon: <UnlinkIcon />,
           show:
-            download.status === "seeding" &&
-            download.downloader === Downloader.Torrent,
+            game.download?.status === "seeding" &&
+            game.download?.downloader === Downloader.Torrent,
           onClick: () => {
             pauseSeeding(game.shop, game.objectId);
           },
@@ -218,8 +253,8 @@ export function DownloadGroup({
           disabled: deleting,
           icon: <LinkIcon />,
           show:
-            download.status !== "seeding" &&
-            download.downloader === Downloader.Torrent,
+            game.download?.status !== "seeding" &&
+            game.download?.downloader === Downloader.Torrent,
           onClick: () => {
             resumeSeeding(game.shop, game.objectId);
           },
@@ -235,7 +270,7 @@ export function DownloadGroup({
       ];
     }
 
-    if (isGameDownloading || download?.status === "active") {
+    if (isGameDownloading) {
       return [
         {
           label: t("pause"),
@@ -294,30 +329,23 @@ export function DownloadGroup({
       <ul className="download-group__downloads">
         {library.map((game) => {
           return (
-            <li key={game.id} className="download-group__item">
+            <li
+              key={game.id}
+              className={cn("download-group__item", {
+                "download-group__item--hydra":
+                  game.download?.downloader === Downloader.Hydra,
+              })}
+            >
               <div className="download-group__cover">
                 <div className="download-group__cover-backdrop">
                   <img
-                    src={steamUrlBuilder.library(game.objectId)}
+                    src={game.libraryImageUrl ?? ""}
                     className="download-group__cover-image"
                     alt={game.title}
                   />
 
                   <div className="download-group__cover-content">
-                    {game.download?.downloader === Downloader.TorBox ? (
-                      <Badge>
-                        <img
-                          src={torBoxLogo}
-                          alt="TorBox"
-                          style={{ width: 13 }}
-                        />
-                        <span>TorBox</span>
-                      </Badge>
-                    ) : (
-                      <Badge>
-                        {DOWNLOADER_NAME[game.download!.downloader]}
-                      </Badge>
-                    )}
+                    <Badge>{DOWNLOADER_NAME[game.download!.downloader]}</Badge>
                   </div>
                 </div>
               </div>
@@ -358,6 +386,10 @@ export function DownloadGroup({
                   </DropdownMenu>
                 )}
               </div>
+
+              {game.download?.downloader === Downloader.Hydra && (
+                <div className="download-group__hydra-gradient" />
+              )}
             </li>
           );
         })}

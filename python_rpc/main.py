@@ -44,7 +44,7 @@ if start_download_payload:
         http_downloader = HttpDownloader()
         downloads[initial_download['game_id']] = http_downloader
         try:
-            http_downloader.start_download(initial_download['url'], initial_download['save_path'], initial_download.get('header'), initial_download.get("out"))
+            http_downloader.start_download(initial_download['url'], initial_download['save_path'], initial_download.get('header'), initial_download.get('out'))
         except Exception as e:
             print("Error starting http download", e)
 
@@ -136,7 +136,7 @@ def process_list():
     if auth_error:
         return auth_error
 
-    process_list = [proc.info for proc in psutil.process_iter(['exe', 'pid', 'name'])]
+    process_list = [proc.info for proc in psutil.process_iter(['exe', 'cwd', 'pid', 'name', 'environ'])]
     return jsonify(process_list), 200
 
 @app.route("/profile-image", methods=["POST"])
@@ -201,6 +201,8 @@ def action():
         downloader = downloads.get(game_id)
         if downloader:
             downloader.pause_download()
+        
+        if downloading_game_id == game_id:
             downloading_game_id = -1
     elif action == 'cancel':
         downloader = downloads.get(game_id)
@@ -222,4 +224,3 @@ def action():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(http_port))
-    

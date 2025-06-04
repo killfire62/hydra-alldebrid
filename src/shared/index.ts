@@ -1,5 +1,22 @@
+import {
+  ptBR,
+  enUS,
+  es,
+  fr,
+  pl,
+  hu,
+  tr,
+  ru,
+  it,
+  be,
+  zhCN,
+  da,
+} from "date-fns/locale";
+
 import { charMap } from "./char-map";
 import { Downloader } from "./constants";
+import { format } from "date-fns";
+import { AchievementNotificationInfo } from "@types";
 
 export * from "./constants";
 
@@ -31,6 +48,12 @@ export const formatBytes = (bytes: number): string => {
   const formatedByte = bytes / byteKBase ** base;
 
   return `${Math.trunc(formatedByte * 10) / 10} ${FORMAT[base]}`;
+};
+
+export const formatBytesToMbps = (bytesPerSecond: number): string => {
+  const bitsPerSecond = bytesPerSecond * 8;
+  const mbps = bitsPerSecond / (1024 * 1024);
+  return `${Math.trunc(mbps * 10) / 10} Mbps`;
 };
 
 export const pipe =
@@ -100,6 +123,7 @@ export const getDownloadersForUri = (uri: string) => {
       Downloader.TorBox,
       Downloader.RealDebrid,
       Downloader.AllDebrid,
+      Downloader.Hydra,
     ];
   }
 
@@ -128,4 +152,50 @@ export const steamUrlBuilder = {
     `https://cdn.cloudflare.steamstatic.com/steam/apps/${objectId}/library_600x900.jpg`,
   icon: (objectId: string, clientIcon: string) =>
     `https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/${objectId}/${clientIcon}.ico`,
+};
+
+export const getDateLocale = (language: string) => {
+  if (language.startsWith("pt")) return ptBR;
+  if (language.startsWith("es")) return es;
+  if (language.startsWith("fr")) return fr;
+  if (language.startsWith("hu")) return hu;
+  if (language.startsWith("pl")) return pl;
+  if (language.startsWith("tr")) return tr;
+  if (language.startsWith("ru")) return ru;
+  if (language.startsWith("it")) return it;
+  if (language.startsWith("be")) return be;
+  if (language.startsWith("zh")) return zhCN;
+  if (language.startsWith("da")) return da;
+
+  return enUS;
+};
+
+export const formatDate = (
+  date: number | Date | string,
+  language: string
+): string => {
+  if (isNaN(new Date(date).getDate())) return "N/A";
+  return format(date, language == "en" ? "MM-dd-yyyy" : "dd/MM/yyyy");
+};
+
+export const generateAchievementCustomNotificationTest = (
+  t: any,
+  language?: string,
+  options: { isHidden?: boolean; isRare?: boolean; isPlatinum?: boolean } = {}
+): AchievementNotificationInfo => {
+  return {
+    title: t("test_achievement_notification_title", {
+      ns: "notifications",
+      lng: language ?? "en",
+    }),
+    description: t("test_achievement_notification_description", {
+      ns: "notifications",
+      lng: language ?? "en",
+    }),
+    iconUrl: "https://cdn.losbroxas.org/favicon.svg",
+    points: 2440,
+    isHidden: options.isHidden ?? false,
+    isRare: options.isRare ?? false,
+    isPlatinum: options.isPlatinum ?? false,
+  };
 };

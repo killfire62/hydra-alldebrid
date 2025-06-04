@@ -34,6 +34,7 @@ export interface Game {
   title: string;
   iconUrl: string | null;
   playTimeInMilliseconds: number;
+  unsyncedDeltaPlayTimeInMilliseconds?: number;
   lastTimePlayed: Date | null;
   objectId: string;
   shop: GameShop;
@@ -43,6 +44,7 @@ export interface Game {
   executablePath?: string | null;
   launchOptions?: string | null;
   favorite?: boolean;
+  automaticCloudSync?: boolean;
 }
 
 export interface Download {
@@ -59,12 +61,23 @@ export interface Download {
   status: DownloadStatus | null;
   queued: boolean;
   timestamp: number;
+  extracting: boolean;
+  automaticallyExtract: boolean;
 }
 
 export interface GameAchievement {
   achievements: SteamAchievement[];
   unlockedAchievements: UnlockedAchievement[];
+  cacheExpiresTimestamp: number | undefined;
 }
+
+export type AchievementCustomNotificationPosition =
+  | "top-left"
+  | "top-center"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-center"
+  | "bottom-right";
 
 export interface UserPreferences {
   downloadsPath?: string | null;
@@ -76,9 +89,25 @@ export interface UserPreferences {
   runAtStartup?: boolean;
   startMinimized?: boolean;
   disableNsfwAlert?: boolean;
+  enableAutoInstall?: boolean;
   seedAfterDownloadComplete?: boolean;
   showHiddenAchievementsDescription?: boolean;
+  showDownloadSpeedInMegabits?: boolean;
   downloadNotificationsEnabled?: boolean;
   repackUpdatesNotificationsEnabled?: boolean;
   achievementNotificationsEnabled?: boolean;
+  achievementCustomNotificationsEnabled?: boolean;
+  achievementCustomNotificationPosition?: AchievementCustomNotificationPosition;
+  friendRequestNotificationsEnabled?: boolean;
+  friendStartGameNotificationsEnabled?: boolean;
+  showDownloadSpeedInMegabytes?: boolean;
+  extractFilesByDefault?: boolean;
+}
+
+export interface ScreenState {
+  x?: number;
+  y?: number;
+  height: number;
+  width: number;
+  isMaximized: boolean;
 }

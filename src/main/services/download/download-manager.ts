@@ -1,8 +1,14 @@
-import { Downloader, DownloadError } from "@shared";
+import { Downloader, DownloadError, FILE_EXTENSIONS_TO_EXTRACT } from "@shared";
 import { WindowManager } from "../window-manager";
 import { publishDownloadCompleteNotification } from "../notifications";
 import type { Download, DownloadProgress, UserPreferences } from "@types";
-import { GofileApi, QiwiApi, DatanodesApi, MediafireApi } from "../hosters";
+import {
+  GofileApi,
+  QiwiApi,
+  DatanodesApi,
+  MediafireApi,
+  PixelDrainApi,
+} from "../hosters";
 import { PythonRPC } from "../python-rpc";
 import {
   LibtorrentPayload,
@@ -16,7 +22,12 @@ import { logger } from "../logger";
 import { db, downloadsSublevel, gamesSublevel, levelKeys } from "@main/level";
 import { sortBy } from "lodash-es";
 import { TorBoxClient } from "./torbox";
+<<<<<<< HEAD
 import { AllDebridClient } from "./all-debrid";
+=======
+import { GameFilesManager } from "../game-files-manager";
+import { HydraDebridClient } from "./hydra-debrid";
+>>>>>>> upstream/main
 
 export class DownloadManager {
   private static downloadingGameId: string | null = null;
@@ -132,6 +143,8 @@ export class DownloadManager {
         );
       }
 
+      const shouldExtract = download.automaticallyExtract;
+
       if (progress === 1 && download) {
         publishDownloadCompleteNotification(game);
 
@@ -139,21 +152,46 @@ export class DownloadManager {
           userPreferences?.seedAfterDownloadComplete &&
           download.downloader === Downloader.Torrent
         ) {
-          downloadsSublevel.put(gameId, {
+          await downloadsSublevel.put(gameId, {
             ...download,
             status: "seeding",
             shouldSeed: true,
             queued: false,
+            extracting: shouldExtract,
           });
         } else {
-          downloadsSublevel.put(gameId, {
+          await downloadsSublevel.put(gameId, {
             ...download,
             status: "complete",
             shouldSeed: false,
             queued: false,
+            extracting: shouldExtract,
           });
 
           this.cancelDownload(gameId);
+        }
+
+        if (shouldExtract) {
+          const gameFilesManager = new GameFilesManager(
+            game.shop,
+            game.objectId
+          );
+
+          if (
+            FILE_EXTENSIONS_TO_EXTRACT.some((ext) =>
+              download.folderName?.endsWith(ext)
+            )
+          ) {
+            gameFilesManager.extractDownloadedFile();
+          } else {
+            gameFilesManager
+              .extractFilesInDirectory(
+                path.join(download.downloadPath, download.folderName!)
+              )
+              .then(() => {
+                gameFilesManager.setExtractionComplete();
+              });
+          }
         }
 
         const downloads = await downloadsSublevel
@@ -221,8 +259,10 @@ export class DownloadManager {
       } as PauseDownloadPayload)
       .catch(() => {});
 
-    WindowManager.mainWindow?.setProgressBar(-1);
-    this.downloadingGameId = null;
+    if (downloadKey === this.downloadingGameId) {
+      WindowManager.mainWindow?.setProgressBar(-1);
+      this.downloadingGameId = null;
+    }
   }
 
   static async resumeDownload(download: Download) {
@@ -230,14 +270,17 @@ export class DownloadManager {
   }
 
   static async cancelDownload(downloadKey = this.downloadingGameId) {
-    await PythonRPC.rpc.post("/action", {
-      action: "cancel",
-      game_id: downloadKey,
-    });
-
-    WindowManager.mainWindow?.setProgressBar(-1);
+    await PythonRPC.rpc
+      .post("/action", {
+        action: "cancel",
+        game_id: downloadKey,
+      })
+      .catch((err) => {
+        logger.error("Failed to cancel game download", err);
+      });
 
     if (downloadKey === this.downloadingGameId) {
+      WindowManager.mainWindow?.setProgressBar(-1);
       WindowManager.mainWindow?.webContents.send("on-download-progress", null);
       this.downloadingGameId = null;
     }
@@ -276,15 +319,18 @@ export class DownloadManager {
           url: downloadLink,
           save_path: download.downloadPath,
           header: `Cookie: accountToken=${token}`,
+          allow_multiple_connections: true,
+          connections_limit: 8,
         };
       }
       case Downloader.PixelDrain: {
         const id = download.uri.split("/").pop();
+        const downloadUrl = await PixelDrainApi.getDownloadUrl(id!);
 
         return {
           action: "start",
           game_id: downloadId,
-          url: `https://cdn.pd5-gamedriveorg.workers.dev/api/file/${id}`,
+          url: downloadUrl,
           save_path: download.downloadPath,
         };
       }
@@ -347,13 +393,14 @@ export class DownloadManager {
       case Downloader.RealDebrid: {
         const downloadUrl = await RealDebridClient.getDownloadUrl(download.uri);
 
-        if (!downloadUrl) throw new Error(DownloadError.NotCachedInRealDebrid);
+        if (!downloadUrl) throw new Error(DownloadError.NotCachedOnRealDebrid);
 
         return {
           action: "start",
           game_id: downloadId,
           url: downloadUrl,
           save_path: download.downloadPath,
+          allow_multiple_connections: true,
         };
       }
       case Downloader.TorBox: {
@@ -366,6 +413,22 @@ export class DownloadManager {
           url,
           save_path: download.downloadPath,
           out: name,
+          allow_multiple_connections: true,
+        };
+      }
+      case Downloader.Hydra: {
+        const downloadUrl = await HydraDebridClient.getDownloadUrl(
+          download.uri
+        );
+
+        if (!downloadUrl) throw new Error(DownloadError.NotCachedOnHydra);
+
+        return {
+          action: "start",
+          game_id: downloadId,
+          url: downloadUrl,
+          save_path: download.downloadPath,
+          allow_multiple_connections: true,
         };
       }
     }

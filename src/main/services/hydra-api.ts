@@ -8,11 +8,10 @@ import { UserNotLoggedInError, SubscriptionRequiredError } from "@shared";
 import { omit } from "lodash-es";
 import { appVersion } from "@main/constants";
 import { getUserData } from "./user/get-user-data";
-import { isFuture, isToday } from "date-fns";
 import { db } from "@main/level";
 import { levelKeys } from "@main/level/sublevels";
 import type { Auth, User } from "@types";
-import { Crypto } from "./crypto";
+import { WSClient } from "./ws/ws-client";
 
 interface HydraApiOptions {
   needsAuth?: boolean;
@@ -32,8 +31,9 @@ export class HydraApi {
   private static readonly EXPIRATION_OFFSET_IN_MS = 1000 * 60 * 5; // 5 minutes
   private static readonly ADD_LOG_INTERCEPTOR = true;
 
-  private static readonly secondsToMilliseconds = (seconds: number) =>
-    seconds * 1000;
+  private static secondsToMilliseconds(seconds: number) {
+    return seconds * 1000;
+  }
 
   private static userAuth: HydraApiUserAuth = {
     authToken: "",
@@ -42,13 +42,13 @@ export class HydraApi {
     subscription: null,
   };
 
-  private static isLoggedIn() {
+  public static isLoggedIn() {
     return this.userAuth.authToken !== "";
   }
 
   private static hasActiveSubscription() {
-    const expiresAt = this.userAuth.subscription?.expiresAt;
-    return expiresAt && (isFuture(expiresAt) || isToday(expiresAt));
+    const expiresAt = new Date(this.userAuth.subscription?.expiresAt ?? 0);
+    return expiresAt > new Date();
   }
 
   static async handleExternalAuth(uri: string) {
@@ -81,8 +81,8 @@ export class HydraApi {
     db.put<string, Auth>(
       levelKeys.auth,
       {
-        accessToken: Crypto.encrypt(accessToken),
-        refreshToken: Crypto.encrypt(refreshToken),
+        accessToken,
+        refreshToken,
         tokenExpirationTimestamp,
       },
       { valueEncoding: "json" }
@@ -102,6 +102,8 @@ export class HydraApi {
       WindowManager.mainWindow.webContents.send("on-signin");
       await clearGamesRemoteIds();
       uploadGamesBatch();
+      WSClient.close();
+      WSClient.connect();
     }
   }
 
@@ -204,12 +206,8 @@ export class HydraApi {
     const user = result.at(1) as User | undefined;
 
     this.userAuth = {
-      authToken: userAuth?.accessToken
-        ? Crypto.decrypt(userAuth.accessToken)
-        : "",
-      refreshToken: userAuth?.refreshToken
-        ? Crypto.decrypt(userAuth.refreshToken)
-        : "",
+      authToken: userAuth?.accessToken ?? "",
+      refreshToken: userAuth?.refreshToken ?? "",
       expirationTimestamp: userAuth?.tokenExpirationTimestamp ?? 0,
       subscription: user?.subscription
         ? { expiresAt: user.subscription?.expiresAt }
@@ -258,7 +256,7 @@ export class HydraApi {
           levelKeys.auth,
           {
             ...auth,
-            accessToken: Crypto.encrypt(accessToken),
+            accessToken,
             tokenExpirationTimestamp,
           },
           { valueEncoding: "json" }

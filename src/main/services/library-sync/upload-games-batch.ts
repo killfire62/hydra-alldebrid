@@ -15,7 +15,7 @@ export const uploadGamesBatch = async () => {
       );
     });
 
-  const gamesChunks = chunk(games, 50);
+  const gamesChunks = chunk(games, 30);
 
   for (const chunk of gamesChunks) {
     await HydraApi.post(
@@ -26,6 +26,7 @@ export const uploadGamesBatch = async () => {
           playTimeInMilliseconds: Math.trunc(game.playTimeInMilliseconds),
           shop: game.shop,
           lastTimePlayed: game.lastTimePlayed,
+          isFavorite: game.favorite,
         };
       })
     ).catch(() => {});
@@ -33,7 +34,9 @@ export const uploadGamesBatch = async () => {
 
   await mergeWithRemoteGames();
 
-  AchievementWatcherManager.preSearchAchievements();
+  if (HydraApi.isLoggedIn()) {
+    AchievementWatcherManager.preSearchAchievements();
+  }
 
   if (WindowManager.mainWindow)
     WindowManager.mainWindow.webContents.send("on-library-batch-complete");

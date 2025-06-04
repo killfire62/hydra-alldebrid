@@ -26,7 +26,7 @@ export function AddDownloadSourceModal({
   visible,
   onClose,
   onAddDownloadSource,
-}: AddDownloadSourceModalProps) {
+}: Readonly<AddDownloadSourceModalProps>) {
   const [url, setUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -119,7 +119,8 @@ export function AddDownloadSourceModal({
 
       downloadSourcesWorker.postMessage(["IMPORT_DOWNLOAD_SOURCE", url]);
 
-      channel.onmessage = async () => {
+      channel.onmessage = () => {
+        window.electron.createDownloadSources([url]);
         setIsLoading(false);
 
         putDownloadSource();

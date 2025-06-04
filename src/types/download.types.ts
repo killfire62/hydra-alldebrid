@@ -7,7 +7,8 @@ export type DownloadStatus =
   | "error"
   | "complete"
   | "seeding"
-  | "removed";
+  | "removed"
+  | "extracting";
 
 export interface DownloadProgress {
   downloadSpeed: number;
@@ -21,7 +22,7 @@ export interface DownloadProgress {
   download: Download;
 }
 
-/* Torbox */
+/* TorBox */
 export interface TorBoxUser {
   id: number;
   email: string;

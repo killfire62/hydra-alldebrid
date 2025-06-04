@@ -1,4 +1,4 @@
-import type { DownloadSource } from "@types";
+import type { CatalogueSearchResult, DownloadSource } from "@types";
 
 import {
   useAppDispatch,
@@ -44,7 +44,7 @@ export default function Catalogue() {
   const [downloadSources, setDownloadSources] = useState<DownloadSource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<CatalogueSearchResult[]>([]);
 
   const [itemsCount, setItemsCount] = useState(0);
 
@@ -76,6 +76,9 @@ export default function Catalogue() {
       setIsLoading(false);
     }, 500)
   ).current;
+
+  const decodeHTML = (s: string) =>
+    s.replaceAll("&amp;", "&").replaceAll("&lt;", "<").replaceAll("&gt;", ">");
 
   useEffect(() => {
     setResults([]);
@@ -165,7 +168,7 @@ export default function Catalogue() {
       })),
 
       ...filters.publishers.map((publisher) => ({
-        label: publisher,
+        label: decodeHTML(publisher),
         orbColor: filterCategoryColors.publishers,
         key: "publishers",
         value: publisher,
@@ -208,7 +211,7 @@ export default function Catalogue() {
       {
         title: t("publishers"),
         items: steamPublishers.map((publisher) => ({
-          label: publisher,
+          label: decodeHTML(publisher),
           value: publisher,
           checked: filters.publishers.includes(publisher),
         })),

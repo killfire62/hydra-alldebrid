@@ -1,6 +1,7 @@
 import type { GameShop } from "@types";
 
 import Color from "color";
+import { THEME_WEB_STORE_URL } from "./constants";
 
 export const formatDownloadProgress = (
   progress?: number,
@@ -53,3 +54,33 @@ export const buildGameAchievementPath = (
 
 export const darkenColor = (color: string, amount: number, alpha: number = 1) =>
   new Color(color).darken(amount).alpha(alpha).toString();
+
+export const injectCustomCss = (
+  css: string,
+  target: HTMLElement = document.head
+) => {
+  try {
+    target.querySelector("#custom-css")?.remove();
+
+    if (css.startsWith(THEME_WEB_STORE_URL)) {
+      const link = document.createElement("link");
+      link.id = "custom-css";
+      link.rel = "stylesheet";
+      link.href = css;
+      target.appendChild(link);
+    } else {
+      const style = document.createElement("style");
+      style.id = "custom-css";
+      style.textContent = `
+        ${css}
+      `;
+      target.appendChild(style);
+    }
+  } catch (error) {
+    console.error("failed to inject custom css:", error);
+  }
+};
+
+export const removeCustomCss = (target: HTMLElement = document.head) => {
+  target.querySelector("#custom-css")?.remove();
+};

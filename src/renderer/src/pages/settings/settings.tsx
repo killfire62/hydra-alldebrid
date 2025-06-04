@@ -4,22 +4,26 @@ import { SettingsRealDebrid } from "./settings-real-debrid";
 import { SettingsAllDebrid } from "./settings-all-debrid";
 import { SettingsGeneral } from "./settings-general";
 import { SettingsBehavior } from "./settings-behavior";
-import torBoxLogo from "@renderer/assets/icons/torbox.webp";
 import { SettingsDownloadSources } from "./settings-download-sources";
 import {
   SettingsContextConsumer,
   SettingsContextProvider,
 } from "@renderer/context";
 import { SettingsAccount } from "./settings-account";
-import { useUserDetails } from "@renderer/hooks";
+import { useFeature, useUserDetails } from "@renderer/hooks";
 import { useMemo } from "react";
 import "./settings.scss";
-import { SettingsTorbox } from "./settings-torbox";
+import { SettingsAppearance } from "./aparence/settings-appearance";
+import { SettingsTorBox } from "./settings-torbox";
 
 export default function Settings() {
   const { t } = useTranslation("settings");
 
   const { userDetails } = useUserDetails();
+
+  const { isFeatureEnabled, Feature } = useFeature();
+
+  const isTorBoxEnabled = isFeatureEnabled(Feature.TorBox);
 
   const categories = useMemo(() => {
     const categories = [
@@ -27,14 +31,17 @@ export default function Settings() {
       { tabLabel: t("behavior"), contentTitle: t("behavior") },
       { tabLabel: t("download_sources"), contentTitle: t("download_sources") },
       {
-        tabLabel: (
-          <>
-            <img src={torBoxLogo} alt="TorBox" style={{ width: 13 }} />
-            Torbox
-          </>
-        ),
-        contentTitle: "TorBox",
+        tabLabel: t("appearance"),
+        contentTitle: t("appearance"),
       },
+      ...(isTorBoxEnabled
+        ? [
+            {
+              tabLabel: "TorBox",
+              contentTitle: "TorBox",
+            },
+          ]
+        : []),
       { tabLabel: "Real-Debrid", contentTitle: "Real-Debrid" },
       { tabLabel: "All-Debrid", contentTitle: "All-Debrid" },
     ];
@@ -45,12 +52,12 @@ export default function Settings() {
         { tabLabel: t("account"), contentTitle: t("account") },
       ];
     return categories;
-  }, [userDetails, t]);
+  }, [userDetails, t, isTorBoxEnabled]);
 
   return (
     <SettingsContextProvider>
       <SettingsContextConsumer>
-        {({ currentCategoryIndex, setCurrentCategoryIndex }) => {
+        {({ currentCategoryIndex, setCurrentCategoryIndex, appearance }) => {
           const renderCategory = () => {
             if (currentCategoryIndex === 0) {
               return <SettingsGeneral />;
@@ -65,10 +72,14 @@ export default function Settings() {
             }
 
             if (currentCategoryIndex === 3) {
-              return <SettingsTorbox />;
+              return <SettingsAppearance appearance={appearance} />;
             }
 
             if (currentCategoryIndex === 4) {
+              return <SettingsTorBox />;
+            }
+
+            if (currentCategoryIndex === 5) {
               return <SettingsRealDebrid />;
             }
 
@@ -85,7 +96,7 @@ export default function Settings() {
                 <section className="settings__categories">
                   {categories.map((category, index) => (
                     <Button
-                      key={index}
+                      key={category.contentTitle}
                       theme={
                         currentCategoryIndex === index ? "primary" : "outline"
                       }

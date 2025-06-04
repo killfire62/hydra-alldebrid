@@ -7,9 +7,8 @@ import "./game-card.scss";
 
 import { useTranslation } from "react-i18next";
 import { Badge } from "../badge/badge";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useMemo } from "react";
 import { useFormat, useRepacks } from "@renderer/hooks";
-import { steamUrlBuilder } from "@shared";
 
 export interface GameCardProps
   extends React.DetailedHTMLProps<
@@ -45,6 +44,15 @@ export function GameCard({ game, ...props }: GameCardProps) {
 
   const { numberFormatter } = useFormat();
 
+  const firstThreeRepackers = useMemo(
+    () => uniqueRepackers.slice(0, 3),
+    [uniqueRepackers]
+  );
+  const remainingCount = useMemo(
+    () => uniqueRepackers.length - 3,
+    [uniqueRepackers]
+  );
+
   return (
     <button
       {...props}
@@ -54,7 +62,7 @@ export function GameCard({ game, ...props }: GameCardProps) {
     >
       <div className="game-card__backdrop">
         <img
-          src={steamUrlBuilder.library(game.objectId)}
+          src={game.libraryImageUrl}
           alt={game.title}
           className="game-card__cover"
           loading="lazy"
@@ -68,15 +76,24 @@ export function GameCard({ game, ...props }: GameCardProps) {
 
           {uniqueRepackers.length > 0 ? (
             <ul className="game-card__download-options">
-              {uniqueRepackers.map((repacker) => (
+              {firstThreeRepackers.map((repacker) => (
                 <li key={repacker}>
                   <Badge>{repacker}</Badge>
                 </li>
               ))}
+              {remainingCount > 0 && (
+                <li>
+                  <Badge>
+                    +{remainingCount}{" "}
+                    {t("game_card:available", { count: remainingCount })}
+                  </Badge>
+                </li>
+              )}
             </ul>
           ) : (
             <p className="game-card__no-download-label">{t("no_downloads")}</p>
           )}
+
           <div className="game-card__specifics">
             <div className="game-card__specifics-item">
               <DownloadIcon />
@@ -84,11 +101,10 @@ export function GameCard({ game, ...props }: GameCardProps) {
                 {stats ? numberFormatter.format(stats.downloadCount) : "…"}
               </span>
             </div>
-
             <div className="game-card__specifics-item">
               <PeopleIcon />
               <span>
-                {stats ? numberFormatter.format(stats?.playerCount) : "…"}
+                {stats ? numberFormatter.format(stats.playerCount) : "…"}
               </span>
             </div>
           </div>

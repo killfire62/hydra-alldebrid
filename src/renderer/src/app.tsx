@@ -28,6 +28,7 @@ import { downloadSourcesTable } from "./dexie";
 import { useSubscription } from "./hooks/use-subscription";
 import { HydraCloudModal } from "./pages/shared-modals/hydra-cloud/hydra-cloud-modal";
 
+import { injectCustomCss, removeCustomCss } from "./helpers";
 import "./app.scss";
 
 export interface AppProps {
@@ -50,7 +51,6 @@ export function App() {
     isFriendsModalVisible,
     friendRequetsModalTab,
     friendModalUserId,
-    syncFriendRequests,
     hideFriendsModal,
     fetchUserDetails,
     updateUserDetails,
@@ -122,7 +122,7 @@ export function App() {
       .then((response) => {
         if (response) {
           updateUserDetails(response);
-          syncFriendRequests();
+          window.electron.syncFriendRequests();
         }
       })
       .finally(() => {
@@ -133,23 +133,26 @@ export function App() {
         $script.src = `${import.meta.env.RENDERER_VITE_EXTERNAL_RESOURCES_URL}/bundle.js?t=${Date.now()}`;
         document.head.appendChild($script);
       });
-  }, [fetchUserDetails, syncFriendRequests, updateUserDetails, dispatch]);
+  }, [fetchUserDetails, updateUserDetails, dispatch]);
 
   const onSignIn = useCallback(() => {
+    window.electron.getDownloadSources().then((sources) => {
+      sources.forEach((source) => {
+        downloadSourcesWorker.postMessage([
+          "IMPORT_DOWNLOAD_SOURCE",
+          source.url,
+        ]);
+      });
+    });
+
     fetchUserDetails().then((response) => {
       if (response) {
         updateUserDetails(response);
-        syncFriendRequests();
+        window.electron.syncFriendRequests();
         showSuccessToast(t("successfully_signed_in"));
       }
     });
-  }, [
-    fetchUserDetails,
-    syncFriendRequests,
-    t,
-    showSuccessToast,
-    updateUserDetails,
-  ]);
+  }, [fetchUserDetails, t, showSuccessToast, updateUserDetails]);
 
   useEffect(() => {
     const unsubscribe = window.electron.onGamesRunning((gamesRunning) => {
@@ -219,19 +222,50 @@ export function App() {
 
       const downloadSources = await downloadSourcesTable.toArray();
 
-      downloadSources
-        .filter((source) => !source.fingerprint)
-        .forEach(async (downloadSource) => {
-          const { fingerprint } = await window.electron.putDownloadSource(
-            downloadSource.objectIds
-          );
+      await Promise.all(
+        downloadSources
+          .filter((source) => !source.fingerprint)
+          .map(async (downloadSource) => {
+            const { fingerprint } = await window.electron.putDownloadSource(
+              downloadSource.objectIds
+            );
 
-          downloadSourcesTable.update(downloadSource.id, { fingerprint });
-        });
+            return downloadSourcesTable.update(downloadSource.id, {
+              fingerprint,
+            });
+          })
+      );
+
+      channel.close();
     };
 
     downloadSourcesWorker.postMessage(["SYNC_DOWNLOAD_SOURCES", id]);
+
+    return () => {
+      channel.close();
+    };
   }, [updateRepacks]);
+
+  const loadAndApplyTheme = useCallback(async () => {
+    const activeTheme = await window.electron.getActiveCustomTheme();
+    if (activeTheme?.code) {
+      injectCustomCss(activeTheme.code);
+    } else {
+      removeCustomCss();
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAndApplyTheme();
+  }, [loadAndApplyTheme]);
+
+  useEffect(() => {
+    const unsubscribe = window.electron.onCustomThemeUpdated(() => {
+      loadAndApplyTheme();
+    });
+
+    return () => unsubscribe();
+  }, [loadAndApplyTheme]);
 
   const playAudio = useCallback(() => {
     const audio = new Audio(achievementSound);

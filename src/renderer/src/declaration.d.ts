@@ -3,7 +3,6 @@ import type {
   AppUpdaterEvent,
   GameShop,
   HowLongToBeatCategory,
-  ShopDetails,
   Steam250Game,
   DownloadProgress,
   SeedingStatus,
@@ -29,7 +28,19 @@ import type {
   LibraryGame,
   GameRunning,
   TorBoxUser,
+<<<<<<< HEAD
   AllDebridUser,
+=======
+  Theme,
+  Badge,
+  Auth,
+  ShortcutLocation,
+  CatalogueSearchResult,
+  ShopAssets,
+  ShopDetailsWithAssets,
+  AchievementCustomNotificationPosition,
+  AchievementNotificationInfo,
+>>>>>>> upstream/main
 } from "@types";
 import type { AxiosProgressEvent } from "axios";
 import type disk from "diskusage";
@@ -57,19 +68,27 @@ declare global {
       cb: (value: SeedingStatus[]) => void
     ) => () => Electron.IpcRenderer;
     onHardDelete: (cb: () => void) => () => Electron.IpcRenderer;
+    checkDebridAvailability: (
+      magnets: string[]
+    ) => Promise<Record<string, boolean>>;
 
     /* Catalogue */
     searchGames: (
       payload: CatalogueSearchPayload,
       take: number,
       skip: number
-    ) => Promise<{ edges: any[]; count: number }>;
-    getCatalogue: (category: CatalogueCategory) => Promise<any[]>;
+    ) => Promise<{ edges: CatalogueSearchResult[]; count: number }>;
+    getCatalogue: (category: CatalogueCategory) => Promise<ShopAssets[]>;
+    saveGameShopAssets: (
+      objectId: string,
+      shop: GameShop,
+      assets: ShopAssets
+    ) => Promise<void>;
     getGameShopDetails: (
       objectId: string,
       shop: GameShop,
       language: string
-    ) => Promise<ShopDetails | null>;
+    ) => Promise<ShopDetailsWithAssets | null>;
     getRandomGame: () => Promise<Steam250Game>;
     getHowLongToBeat: (
       objectId: string,
@@ -86,12 +105,21 @@ declare global {
     getDevelopers: () => Promise<string[]>;
 
     /* Library */
+    toggleAutomaticCloudSync: (
+      shop: GameShop,
+      objectId: string,
+      automaticCloudSync: boolean
+    ) => Promise<void>;
     addGameToLibrary: (
       shop: GameShop,
       objectId: string,
       title: string
     ) => Promise<void>;
-    createGameShortcut: (shop: GameShop, objectId: string) => Promise<boolean>;
+    createGameShortcut: (
+      shop: GameShop,
+      objectId: string,
+      location: ShortcutLocation
+    ) => Promise<boolean>;
     updateExecutablePath: (
       shop: GameShop,
       objectId: string,
@@ -115,10 +143,7 @@ declare global {
     verifyExecutablePathInUse: (executablePath: string) => Promise<Game>;
     getLibrary: () => Promise<LibraryGame[]>;
     openGameInstaller: (shop: GameShop, objectId: string) => Promise<boolean>;
-    openGameInstallerPath: (
-      shop: GameShop,
-      objectId: string
-    ) => Promise<boolean>;
+    openGameInstallerPath: (shop: GameShop, objectId: string) => Promise<void>;
     openGameExecutablePath: (shop: GameShop, objectId: string) => Promise<void>;
     openGame: (
       shop: GameShop,
@@ -134,6 +159,7 @@ declare global {
       shop: GameShop,
       objectId: string
     ) => Promise<LibraryGame | null>;
+    syncGameByObjectId: (shop: GameShop, objectId: string) => Promise<void>;
     onGamesRunning: (
       cb: (
         gamesRunning: Pick<GameRunning, "id" | "sessionDurationInMillis">[]
@@ -142,6 +168,8 @@ declare global {
     onLibraryBatchComplete: (cb: () => void) => () => Electron.IpcRenderer;
     resetGameAchievements: (shop: GameShop, objectId: string) => Promise<void>;
     /* User preferences */
+    authenticateRealDebrid: (apiToken: string) => Promise<RealDebridUser>;
+    authenticateTorBox: (apiToken: string) => Promise<TorBoxUser>;
     getUserPreferences: () => Promise<UserPreferences | null>;
     updateUserPreferences: (
       preferences: Partial<UserPreferences>
@@ -150,17 +178,31 @@ declare global {
       enabled: boolean;
       minimized: boolean;
     }) => Promise<void>;
+<<<<<<< HEAD
     authenticateRealDebrid: (apiToken: string) => Promise<RealDebridUser>;
     authenticateAllDebrid: (
       apiKey: string
     ) => Promise<AllDebridUser | { error_code: string }>;
     authenticateTorBox: (apiToken: string) => Promise<TorBoxUser>;
     onAchievementUnlocked: (cb: () => void) => () => Electron.IpcRenderer;
+=======
+    extractGameDownload: (shop: GameShop, objectId: string) => Promise<boolean>;
+    onExtractionComplete: (
+      cb: (shop: GameShop, objectId: string) => void
+    ) => () => Electron.IpcRenderer;
+    getDefaultWinePrefixSelectionPath: () => Promise<string | null>;
+    createSteamShortcut: (shop: GameShop, objectId: string) => Promise<void>;
+>>>>>>> upstream/main
 
     /* Download sources */
     putDownloadSource: (
       objectIds: string[]
     ) => Promise<{ fingerprint: string }>;
+    createDownloadSources: (urls: string[]) => Promise<void>;
+    removeDownloadSource: (url: string, removeAll?: boolean) => Promise<void>;
+    getDownloadSources: () => Promise<
+      Pick<DownloadSource, "url" | "createdAt" | "updatedAt">[]
+    >;
 
     /* Hardware */
     getDiskFreeSpace: (path: string) => Promise<disk.DiskUsage>;
@@ -171,6 +213,14 @@ declare global {
       objectId: string,
       shop: GameShop,
       downloadOptionTitle: string | null
+    ) => Promise<void>;
+    toggleArtifactFreeze: (
+      gameArtifactId: string,
+      freeze: boolean
+    ) => Promise<void>;
+    renameGameArtifact: (
+      gameArtifactId: string,
+      label: string
     ) => Promise<void>;
     downloadGameArtifact: (
       objectId: string,
@@ -220,6 +270,12 @@ declare global {
     ) => Promise<Electron.OpenDialogReturnValue>;
     showItemInFolder: (path: string) => Promise<void>;
     getFeatures: () => Promise<string[]>;
+    getBadges: () => Promise<Badge[]>;
+    canInstallCommonRedist: () => Promise<boolean>;
+    installCommonRedist: () => Promise<void>;
+    onCommonRedistProgress: (
+      cb: (value: { log: string; complete: boolean }) => void
+    ) => () => Electron.IpcRenderer;
     platform: NodeJS.Platform;
 
     /* Auto update */
@@ -230,6 +286,7 @@ declare global {
     restartAndInstallUpdate: () => Promise<void>;
 
     /* Auth */
+    getAuth: () => Promise<Auth | null>;
     signOut: () => Promise<void>;
     openAuthWindow: (page: AuthPage) => Promise<void>;
     getSessionHash: () => Promise<string | null>;
@@ -274,7 +331,10 @@ declare global {
       path: string
     ) => Promise<{ imagePath: string; mimeType: string }>;
     getFriendRequests: () => Promise<FriendRequest[]>;
-    syncFriendRequests: () => Promise<FriendRequestSync>;
+    syncFriendRequests: () => Promise<void>;
+    onSyncFriendRequests: (
+      cb: (friendRequests: FriendRequestSync) => void
+    ) => () => Electron.IpcRenderer;
     updateFriendRequest: (
       userId: string,
       action: FriendRequestAction
@@ -283,6 +343,36 @@ declare global {
 
     /* Notifications */
     publishNewRepacksNotification: (newRepacksCount: number) => Promise<void>;
+    onAchievementUnlocked: (
+      cb: (
+        position?: AchievementCustomNotificationPosition,
+        achievements?: AchievementNotificationInfo[]
+      ) => void
+    ) => () => Electron.IpcRenderer;
+    onCombinedAchievementsUnlocked: (
+      cb: (
+        gameCount: number,
+        achievementCount: number,
+        position: AchievementCustomNotificationPosition
+      ) => void
+    ) => () => Electron.IpcRenderer;
+    updateAchievementCustomNotificationWindow: () => Promise<void>;
+    showAchievementTestNotification: () => Promise<void>;
+
+    /* Themes */
+    addCustomTheme: (theme: Theme) => Promise<void>;
+    getAllCustomThemes: () => Promise<Theme[]>;
+    deleteAllCustomThemes: () => Promise<void>;
+    deleteCustomTheme: (themeId: string) => Promise<void>;
+    updateCustomTheme: (themeId: string, code: string) => Promise<void>;
+    getCustomThemeById: (themeId: string) => Promise<Theme | null>;
+    getActiveCustomTheme: () => Promise<Theme | null>;
+    toggleCustomTheme: (themeId: string, isActive: boolean) => Promise<void>;
+
+    /* Editor */
+    openEditorWindow: (themeId: string) => Promise<void>;
+    onCustomThemeUpdated: (cb: () => void) => () => Electron.IpcRenderer;
+    closeEditorWindow: (themeId?: string) => Promise<void>;
   }
 
   interface Window {

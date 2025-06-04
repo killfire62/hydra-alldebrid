@@ -1,10 +1,16 @@
+import { ShopAssets } from "@types";
 import { HydraApi } from "../hydra-api";
-import { steamGamesWorker } from "@main/workers";
-import { steamUrlBuilder } from "@shared";
-import { gamesSublevel, levelKeys } from "@main/level";
+import { gamesShopAssetsSublevel, gamesSublevel, levelKeys } from "@main/level";
+
+type ProfileGame = {
+  id: string;
+  lastTimePlayed: Date | null;
+  playTimeInMilliseconds: number;
+  isFavorite?: boolean;
+} & ShopAssets;
 
 export const mergeWithRemoteGames = async () => {
-  return HydraApi.get("/profile/games")
+  return HydraApi.get<ProfileGame[]>("/profile/games")
     .then(async (response) => {
       for (const game of response) {
         const localGame = await gamesSublevel.get(
@@ -24,32 +30,41 @@ export const mergeWithRemoteGames = async () => {
               ? game.playTimeInMilliseconds
               : localGame.playTimeInMilliseconds;
 
-          gamesSublevel.put(levelKeys.game(game.shop, game.objectId), {
+          await gamesSublevel.put(levelKeys.game(game.shop, game.objectId), {
             ...localGame,
             remoteId: game.id,
             lastTimePlayed: updatedLastTimePlayed,
             playTimeInMilliseconds: updatedPlayTime,
+            favorite: game.isFavorite ?? localGame.favorite,
           });
         } else {
-          const steamGame = await steamGamesWorker.run(Number(game.objectId), {
-            name: "getById",
-          });
-
-          const iconUrl = steamGame?.clientIcon
-            ? steamUrlBuilder.icon(game.objectId, steamGame.clientIcon)
-            : null;
-
-          gamesSublevel.put(levelKeys.game(game.shop, game.objectId), {
+          await gamesSublevel.put(levelKeys.game(game.shop, game.objectId), {
             objectId: game.objectId,
-            title: steamGame?.name,
+            title: game.title,
             remoteId: game.id,
             shop: game.shop,
-            iconUrl,
+            iconUrl: game.iconUrl,
             lastTimePlayed: game.lastTimePlayed,
             playTimeInMilliseconds: game.playTimeInMilliseconds,
             isDeleted: false,
+            favorite: game.isFavorite ?? false,
           });
         }
+
+        await gamesShopAssetsSublevel.put(
+          levelKeys.game(game.shop, game.objectId),
+          {
+            shop: game.shop,
+            objectId: game.objectId,
+            title: game.title,
+            coverImageUrl: game.coverImageUrl,
+            libraryHeroImageUrl: game.libraryHeroImageUrl,
+            libraryImageUrl: game.libraryImageUrl,
+            logoImageUrl: game.logoImageUrl,
+            iconUrl: game.iconUrl,
+            logoPosition: game.logoPosition,
+          }
+        );
       }
     })
     .catch(() => {});
